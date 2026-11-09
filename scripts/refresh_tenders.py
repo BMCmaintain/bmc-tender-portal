@@ -33,6 +33,19 @@ def pages(origin, path, params):
         else:
             url = None
 
+def delivery_regions(tender):
+    regions = set()
+    scopes = [tender, *(tender.get("lots") or []), *(tender.get("items") or [])]
+    for scope in scopes:
+        for address in scope.get("deliveryAddresses") or []:
+            for key in ("region", "locality"):
+                if address.get(key):
+                    regions.add(str(address[key]))
+        for location in scope.get("deliveryLocations") or []:
+            gazetteer = location.get("gazetteer") or {}
+            regions.update(str(code) for code in gazetteer.get("identifiers") or [])
+    return sorted(regions)
+
 def parse_notice(release, name, origin):
     tender = release.get("tender") or {}
     deadline = (tender.get("tenderPeriod") or {}).get("endDate")
@@ -58,6 +71,7 @@ def parse_notice(release, name, origin):
     value = tender.get("value") or {}
     return {
         "title": title,
+        "regions": delivery_regions(tender),
         "description": description[:1800],
         "deadline": closes.isoformat(),
         "published": release.get("date", ""),
