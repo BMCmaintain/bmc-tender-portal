@@ -4,6 +4,7 @@ import re
 import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from zoneinfo import ZoneInfo
 from urllib.parse import urlencode, urljoin, urlsplit
 from urllib.request import Request, urlopen
 
@@ -39,7 +40,13 @@ def parse_notice(release, name, origin):
     description = re.sub(r"<[^>]+>", " ", tender.get("description") or "")
     if tender.get("status") != "active" or not deadline or not title:
         return None
-    if datetime.fromisoformat(deadline.replace("Z", "+00:00")) <= NOW:
+    try:
+        closes = datetime.fromisoformat(deadline.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if closes.tzinfo is None:
+        closes = closes.replace(tzinfo=ZoneInfo("Europe/London"))
+    if closes <= NOW:
         return None
     if not TERMS.search(title + " " + description):
         return None
@@ -52,7 +59,7 @@ def parse_notice(release, name, origin):
     return {
         "title": title,
         "description": description[:1800],
-        "deadline": deadline,
+        "deadline": closes.isoformat(),
         "published": release.get("date", ""),
         "buyer": (release.get("buyer") or {}).get("name", ""),
         "value": value.get("amount") if value.get("currency") == "GBP" else None,
